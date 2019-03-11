@@ -5,7 +5,7 @@ https://arxiv.org/abs/1512.02325
 
 ## Implementation
 
-ssh://git@gitlab.devtools.intel.com:29418/zhennanq/gluon-cv.git
+https://gitlab.devtools.intel.com/zhennanq/gluon-cv.git
 
 ## Prepare Data Set
 COCO 2017 (http://cocodataset.org/)
