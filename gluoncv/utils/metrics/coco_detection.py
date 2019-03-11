@@ -138,11 +138,11 @@ class COCODetectionMetric(mx.metric.EvalMetric):
                 ind_lo:(ind_hi + 1), :, cls_ind, 0, 2]
             ap = np.mean(precision[precision > -1])
             names.append(cls_name)
-            values.append('{:.1f}'.format(100 * ap))
+            values.append('{:.3f}'.format(100 * ap))
         # put mean AP at last, for comparing perf
         names.append('~~~~ MeanAP @ IoU=[{:.2f},{:.2f}] ~~~~\n'.format(
             IoU_lo_thresh, IoU_hi_thresh))
-        values.append('{:.1f}'.format(100 * ap_default))
+        values.append('{:.3f}'.format(100 * ap_default))
         return names, values
 
     # pylint: disable=arguments-differ, unused-argument

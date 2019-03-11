@@ -3,6 +3,7 @@ from __future__ import absolute_import
 
 import os
 import mxnet as mx
+import numpy as np
 from mxnet import autograd
 from mxnet.gluon import nn
 from mxnet.gluon import HybridBlock
@@ -12,6 +13,7 @@ from ...nn.predictor import ConvPredictor
 from ...nn.coder import MultiPerClassDecoder, NormalizedBoxCenterDecoder
 from .vgg_atrous import vgg16_atrous_300, vgg16_atrous_512
 from ...data import VOCDetection
+from ...nn.bbox import BBoxCornerToCenter,BBoxCenterToCorner
 
 __all__ = ['SSD', 'get_ssd',
            'ssd_300_vgg16_atrous_voc',
@@ -119,6 +121,8 @@ class SSD(HybridBlock):
         self.nms_thresh = nms_thresh
         self.nms_topk = nms_topk
         self.post_nms = post_nms
+        self.base_size = float(base_size)
+        self.anchor_parameters = []
 
         with self.name_scope():
             if network is None:
@@ -137,6 +141,9 @@ class SSD(HybridBlock):
             im_size = (base_size, base_size)
             for i, s, r, st in zip(range(num_layers), sizes, ratios, steps):
                 anchor_generator = SSDAnchorGenerator(i, im_size, s, r, st, (asz, asz))
+                size_req = np.array(s) * (1.0 / self.base_size)
+                size_req = size_req.tolist()
+                self.anchor_parameters.append((size_req, r, [st / self.base_size, st / self.base_size]))
                 self.anchor_generators.add(anchor_generator)
                 asz = max(asz // 2, 16)  # pre-compute larger than 16x16 anchor map
                 num_anchors = anchor_generator.num_depth
@@ -190,33 +197,32 @@ class SSD(HybridBlock):
                      for feat, cp in zip(features, self.class_predictors)]
         box_preds = [F.flatten(F.transpose(bp(feat), (0, 2, 3, 1)))
                      for feat, bp in zip(features, self.box_predictors)]
+        center_fn = BBoxCornerToCenter()
+        corner_fn = BBoxCenterToCorner()
+        box_preds_concat = F.concat(*box_preds, dim=1)
         anchors = [F.reshape(ag(feat), shape=(1, -1))
                    for feat, ag in zip(features, self.anchor_generators)]
         cls_preds = F.concat(*cls_preds, dim=1).reshape((0, -1, self.num_classes + 1))
         box_preds = F.concat(*box_preds, dim=1).reshape((0, -1, 4))
         anchors = F.concat(*anchors, dim=1).reshape((1, -1, 4))
+        anchors_corner = corner_fn(anchors / self.base_size)
         if autograd.is_training():
             return [cls_preds, box_preds, anchors]
         bboxes = self.bbox_decoder(box_preds, anchors)
         cls_ids, scores = self.cls_decoder(F.softmax(cls_preds, axis=-1))
+        scores_new = F.softmax(F.transpose(cls_preds, (0, 2, 1)), axis=1)
         results = []
-        for i in range(self.num_classes):
-            cls_id = cls_ids.slice_axis(axis=-1, begin=i, end=i+1)
-            score = scores.slice_axis(axis=-1, begin=i, end=i+1)
-            # per class results
-            per_result = F.concat(*[cls_id, score, bboxes], dim=-1)
-            results.append(per_result)
-        result = F.concat(*results, dim=1)
+        bbox_new = F.flatten(bboxes)
         if self.nms_thresh > 0 and self.nms_thresh < 1:
-            result = F.contrib.box_nms(
-                result, overlap_thresh=self.nms_thresh, topk=self.nms_topk, valid_thresh=0.01,
-                id_index=0, score_index=1, coord_start=2, force_suppress=False)
-            if self.post_nms > 0:
+           result = F.contrib.MultiBoxDetection(scores_new,box_preds_concat,anchors_corner, nms_threshold = self.nms_thresh, nms_topk = self.nms_topk, force_suppress=False,  variances=(0.1, 0.1, 0.2, 0.2))
+           if self.post_nms > 0:
                 result = result.slice_axis(axis=1, begin=0, end=self.post_nms)
+
         ids = F.slice_axis(result, axis=2, begin=0, end=1)
         scores = F.slice_axis(result, axis=2, begin=1, end=2)
         bboxes = F.slice_axis(result, axis=2, begin=2, end=6)
-        return ids, scores, bboxes
+
+        return ids, scores, bboxes * self.base_size
 
     def reset_class(self, classes):
         """Reset class categories and class predictors.
