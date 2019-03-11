@@ -88,4 +88,4 @@ numactl --physcpubind=0-27 --membind=0 python eval_ssd.py --model-prefix quantiz
 Upon completion of this command, the validation COCO mAP will be displayed and should closely match the validation COCO mAP shown below.
 
 ~~~~ MeanAP @ IoU=[0.50,0.95] ~~~~
- 23.879
+ 23.960
