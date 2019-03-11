@@ -73,7 +73,7 @@ export KMP_AFFINITY=granularity=fine,noduplicates,compact,1,0
 
 Validate the fp32 model using the following command.
 ```
-numactl --physcpubind=0-27 --membind=0 python ./scripts/detection/ssd/eval_ssd.py --model-prefix converted --batch-size=64 --num-workers=1
+numactl --physcpubind=0-27 --membind=0 python eval_ssd.py --model-prefix converted --batch-size=64 --num-workers=1
 ```
 Upon completion of this command, the validation COCO mAP will be displayed and should closely match the validation COCO mAP shown below.
 
@@ -83,7 +83,7 @@ Upon completion of this command, the validation COCO mAP will be displayed and s
 
 Validate the quantized model using the following command.
 ```
-numactl --physcpubind=0-27 --membind=0 python ./scripts/detection/ssd/eval_ssd.py --model-prefix quantized --batch-size=64 --num-workers=1
+numactl --physcpubind=0-27 --membind=0 python eval_ssd.py --model-prefix quantized --batch-size=64 --num-workers=1
 ```
 Upon completion of this command, the validation COCO mAP will be displayed and should closely match the validation COCO mAP shown below.
 

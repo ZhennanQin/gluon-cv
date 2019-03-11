@@ -29,10 +29,10 @@ def parse_args():
     parser.add_argument('--dataset', type=str, default='coco',
                         help='Training dataset.')
     parser.add_argument('--num-workers', '-j', dest='num_workers', type=int,
-                        default=4, help='Number of data workers')
+                        default=1, help='Number of data workers')
     parser.add_argument('--save-prefix', type=str, default='',
                         help='Saving parameter prefix')
-    parser.add_argument('--num-calib-batches', type=int, default=3,
+    parser.add_argument('--num-calib-batches', type=int, default=4,
                         help='number of batches for calibration')
     parser.add_argument('--calib-mode', type=str, default='naive',
                         help='calibration mode used for generating calibration table for the quantized symbol; supports'
@@ -123,8 +123,8 @@ if __name__ == '__main__':
     excluded_sym_names = ["ssd0_flatten0", "ssd0_flatten1", "ssd0_flatten2", "ssd0_flatten3", "ssd0_flatten4", "ssd0_flatten5",
                           "ssd0_flatten6", "ssd0_flatten7", "ssd0_flatten8",  "ssd0_flatten9", "ssd0_flatten10", "ssd0_flatten11",
                           "ssd0_concat1", "ssd0_concat0", "ssd0_concat3", "ssd0_bboxcentertocorner0_concat0"]
-    calib_layer = None
-
+    calib_layer = lambda name: ((name.startswith("sg_mkldnn_conv") and name.endswith('_output'))
+                                or name == "data" or name.endswith("mul0_0"))
     qsym, qarg_params, aux_params = quantize_model(
         sym=sym,
         arg_params=arg_params,
