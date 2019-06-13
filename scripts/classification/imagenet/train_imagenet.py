@@ -12,6 +12,10 @@ from gluoncv.data import imagenet
 from gluoncv.model_zoo import get_model
 from gluoncv.utils import makedirs, LRSequential, LRScheduler
 
+from mxnet.contrib import amp
+
+amp.init(target_dtype='bfloat16')
+
 # CLI
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a model for image classification.')
@@ -348,6 +352,7 @@ def main():
                 v.wd_mult = 0.0
 
         trainer = gluon.Trainer(net.collect_params(), optimizer, optimizer_params)
+        #amp.init_trainer(trainer)
         if opt.resume_states is not '':
             trainer.load_states(opt.resume_states)
 

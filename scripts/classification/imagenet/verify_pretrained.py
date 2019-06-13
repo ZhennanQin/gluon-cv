@@ -60,11 +60,12 @@ if __name__ == '__main__':
     if model_name.startswith('resnext'):
         kwargs['use_se'] = opt.use_se
 
+    print(model_name)
     net = get_model(model_name, **kwargs)
     net.cast(opt.dtype)
     if opt.params_file:
         net.load_parameters(opt.params_file, ctx=ctx)
-    net.hybridize()
+    net.hybridize(static_alloc=True, static_shape=True)
 
     acc_top1 = mx.metric.Accuracy()
     acc_top5 = mx.metric.TopKAccuracy(5)

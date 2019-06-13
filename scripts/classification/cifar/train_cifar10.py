@@ -15,6 +15,12 @@ from gluoncv.model_zoo import get_model
 from gluoncv.utils import makedirs, TrainingHistory
 from gluoncv.data import transforms as gcv_transforms
 
+from mxnet.contrib import amp
+
+from mxnet import profiler
+
+#amp.init(target_dtype='bfloat16')
+
 # CLI
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a model for image classification.')
@@ -79,6 +85,8 @@ def main():
     net = get_model(model_name, **kwargs)
     if opt.resume_from:
         net.load_parameters(opt.resume_from, ctx = context)
+    else:
+        net.initialize(mx.init.Xavier(), ctx=context)
     optimizer = 'nag'
 
     save_period = opt.save_period
@@ -91,8 +99,9 @@ def main():
 
     plot_path = opt.save_plot_dir
 
-    logging.basicConfig(level=logging.INFO)
-    logging.info(opt)
+    logger = logging.getLogger('')
+    logger.setLevel(logging.INFO)
+    logger.info(opt)
 
     transform_train = transforms.Compose([
         gcv_transforms.RandomCrop(32, pad=4),
@@ -118,8 +127,7 @@ def main():
     def train(epochs, ctx):
         if isinstance(ctx, mx.Context):
             ctx = [ctx]
-        net.initialize(mx.init.Xavier(), ctx=ctx)
-
+        
         train_data = gluon.data.DataLoader(
             gluon.data.vision.CIFAR10(train=True).transform_first(transform_train),
             batch_size=batch_size, shuffle=True, last_batch='discard', num_workers=num_workers)
@@ -130,6 +138,7 @@ def main():
 
         trainer = gluon.Trainer(net.collect_params(), optimizer,
                                 {'learning_rate': opt.lr, 'wd': opt.wd, 'momentum': opt.momentum})
+        #amp.init_trainer(trainer)
         metric = mx.metric.Accuracy()
         train_metric = mx.metric.Accuracy()
         loss_fn = gluon.loss.SoftmaxCrossEntropyLoss()
@@ -140,7 +149,10 @@ def main():
 
         best_val_score = 0
 
-        for epoch in range(epochs):
+        #mx.profiler.set_config(profile_all=True, filename='profile.json')
+        #mx.profiler.set_state('run')
+
+        for epoch in range(0, epochs):
             tic = time.time()
             train_metric.reset()
             metric.reset()
@@ -151,7 +163,6 @@ def main():
             if epoch == lr_decay_epoch[lr_decay_count]:
                 trainer.set_learning_rate(trainer.learning_rate*lr_decay)
                 lr_decay_count += 1
-
             for i, batch in enumerate(train_data):
                 data = gluon.utils.split_and_load(batch[0], ctx_list=ctx, batch_axis=0)
                 label = gluon.utils.split_and_load(batch[1], ctx_list=ctx, batch_axis=0)
@@ -179,19 +190,20 @@ def main():
                 net.save_parameters('%s/%.4f-cifar-%s-%d-best.params'%(save_dir, best_val_score, model_name, epoch))
 
             name, val_acc = test(ctx, val_data)
-            logging.info('[Epoch %d] train=%f val=%f loss=%f time: %f' %
+            logger.info('[Epoch %d] train=%f val=%f loss=%f time: %f' %
                 (epoch, acc, val_acc, train_loss, time.time()-tic))
 
-            if save_period and save_dir and (epoch + 1) % save_period == 0:
-                net.save_parameters('%s/cifar10-%s-%d.params'%(save_dir, model_name, epoch))
+            #if save_period and save_dir and (epoch + 1) % save_period == 0:
+            #    net.save_parameters('%s/cifar10-%s-%d.params'%(save_dir, model_name, epoch))
 
-        if save_period and save_dir:
-            net.save_parameters('%s/cifar10-%s-%d.params'%(save_dir, model_name, epochs-1))
-
+        #if save_period and save_dir:
+        #    net.save_parameters('%s/cifar10-%s-%d.params'%(save_dir, model_name, epochs-1))
+        print("stop")
+        #mx.profiler.set_state('stop')
 
 
     if opt.mode == 'hybrid':
-        net.hybridize()
+        net.hybridize(static_alloc=True, static_shape=True)
     train(opt.num_epochs, context)
 
 if __name__ == '__main__':
